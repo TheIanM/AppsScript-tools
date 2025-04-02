@@ -1,0 +1,79 @@
+function setup() {
+  createMenu();
+}
+
+function createMenu() {
+  SpreadsheetApp.getUi().createMenu('RSS Feeds')
+    .addItem('Add New RSS Feed', 'addNewFeed')
+    .addSeparator()
+    .addToUi();
+}
+
+function addNewFeed() {
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.prompt("Enter the URL of the RSS feed:");
+  if (response.getSelectedButton() == ui.Button.OK) {
+    var url = response.getResponseText().trim();
+    addSheetForFeed(url);
+  }
+}
+
+function addSheetForFeed(feedUrl) {
+  var sheetName = getFeedTitle(feedUrl);
+  if (sheetExists(sheetName)) {
+    Browser.msgBox("A sheet for this feed already exists.");
+    return;
+  }
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var newSheet = ss.insertSheet(sheetName, ss.getSheets().length);
+  updateFeedData(newSheet, feedUrl);
+}
+
+function getFeedTitle(feedUrl) {
+  try {
+    var response = UrlFetchApp.fetch(feedUrl, {muteHttpExceptions: true});
+    var xml = XmlService.parse(response.getContentText());
+    var entries = xml.getRootElement().getChild('channel').getChildren('item');
+    if (entries.length > 0) {
+      return entries[0].getChild('title').getText();
+    } else {
+      throw new Error("No items found in the RSS feed.");
+    }
+  } catch (e) {
+    Logger.log(e);
+    Browser.msgBox("Failed to fetch or parse the RSS feed: " + e.message);
+  }
+}
+
+function sheetExists(sheetName) {
+  var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getName() === sheetName) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function updateFeedData(sheet, feedUrl) {
+  try {
+    var response = UrlFetchApp.fetch(feedUrl, {muteHttpExceptions: true});
+    var xml = XmlService.parse(response.getContentText());
+    var entries = xml.getRootElement().getChild('channel').getChildren('item');
+    if (entries.length > 0) {
+      sheet.clear();
+      var headers = ['Title', 'Link'];
+      sheet.appendRow(headers);
+      for (var i = 0; i < entries.length; i++) {
+        var title = entries[i].getChild('title').getText();
+        var link = entries[i].getChild('link').getText();
+        sheet.appendRow([title, link]);
+      }
+    } else {
+      Browser.msgBox("No items found in the RSS feed.");
+    }
+  } catch (e) {
+    Logger.log(e);
+    Browser.msgBox("Failed to fetch or parse the RSS feed: " + e.message);
+  }
+}
